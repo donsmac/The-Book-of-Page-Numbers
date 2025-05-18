@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Evolving Counter 7x7 (Large Matrix)</title>
+  <style>
+    body {
+      background-color: #1a1a1a;
+      color: white; /* Ensure text is visible by default */
+      font-family: monospace;
+    }
+
+    .container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh; /* Use min-height for flexibility */
+      padding: 20px; /* Add some padding */
+    }
+
+    .page-counter {
+      font-size: 18px; /* Adjusted size for 49 bits */
+      font-family: monospace;
+      color: white;
+      background-color: black;
+      padding: 10px 15px; /* Adjusted padding */
+      margin-bottom: 20px;
+      border-radius: 5px;
+      text-shadow: 0 0 5px rgba(255, 255, 255, 0.8);
+      word-break: break-all; /* Allow breaking if needed on small screens */
+    }
+
+    .page-counter.highlight {
+      color: yellow;
+      text-shadow: 0 0 10px rgba(255, 255, 0, 0.8);
+    }
+
+    /* Updated for 7x7 grid with larger squares */
+    .grid7x7 {
+      display: grid;
+      /* Changed 40px to 80px */
+      grid-template-columns: repeat(7, 80px);
+      grid-template-rows: repeat(7, 80px);
+      justify-content: center; /* Center grid horizontally */
+      margin-bottom: 30px; /* Adjusted margin */
+      border: 1px solid #333; /* Optional border for clarity */
+    }
+
+    /* Keep grid49 styles as they were */
+    .grid49 {
+      display: grid;
+      grid-template-columns: repeat(49, 30px); /* Slightly smaller squares */
+      grid-template-rows: 30px;
+      justify-content: center; /* Center grid horizontally */
+      direction: rtl; /* Right-to-left for LSB on right */
+      margin-bottom: 30px; /* Adjusted margin */
+      max-width: 100%; /* Prevent overflow */
+      overflow-x: auto; /* Allow horizontal scroll if needed */
+      padding: 5px 0; /* Padding top/bottom */
+    }
+
+    /* Base square styles */
+    .square {
+      background-color: lightgray;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid #555; /* Add subtle border */
+      box-sizing: border-box; /* Include border in size */
+      cursor: pointer; /* Indicate clickable */
+      transition: background-color 0.1s ease; /* Smooth transition */
+    }
+
+    /* Adjust size specifically for 7x7 grid squares */
+    .grid7x7 .square {
+       /* Changed 40px to 80px */
+       width: 80px;
+       height: 80px;
+    }
+
+     /* Keep size for grid49 squares */
+    .grid49 .square {
+       width: 30px;
+       height: 30px;
+    }
+
+
+    /* Styles for the span inside squares (primarily for grid49) */
+    .square span {
+      font-size: 20px; /* Adjusted size */
+      font-family: monospace;
+      font-weight: bold;
+      text-shadow: 0 0 3px rgba(0, 0, 0, 0.5); /* Darker shadow for contrast */
+      user-select: none; /* Prevent text selection */
+    }
+
+    .square.active {
+      background-color: black;
+    }
+
+    /* Span color when parent square is active (black background) */
+    .square.active span {
+      color: white;
+      text-shadow: 0 0 5px rgba(255, 255, 255, 0.8);
+    }
+
+     /* Span color when parent square is inactive (lightgray background) */
+    .square.inactive span {
+      color: black;
+    }
+
+    .btn-row {
+      display: flex;
+      justify-content: space-between;
+      width: 200px;
+      margin-top: 20px;
+    }
+
+     button {
+        padding: 8px 15px;
+        font-family: monospace;
+        cursor: pointer;
+     }
+
+    .slider-container {
+      margin-top: 20px;
+      text-align: center;
+    }
+
+    .slider-container label {
+      color: white;
+      font-family: monospace;
+      margin-right: 10px;
+    }
+
+    .slider {
+      -webkit-appearance: none;
+      width: 400px; /* Doubled width */
+      height: 10px;
+      background: lightgray;
+      outline: none;
+      border-radius: 5px;
+      vertical-align: middle; /* Align with label better */
+    }
+
+    .slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 20px;
+      height: 20px;
+      background: black;
+      border: 2px solid white; /* Add border to thumb */
+      border-radius: 50%;
+      cursor: pointer;
+      box-shadow: 0 0 5px rgba(255, 255, 255, 0.8);
+    }
+     /* Firefox thumb */
+    .slider::-moz-range-thumb {
+      width: 18px; /* Adjust size if needed */
+      height: 18px;
+      background: black;
+      border: 2px solid white;
+      border-radius: 50%;
+      cursor: pointer;
+      box-shadow: 0 0 5px rgba(255, 255, 255, 0.8);
+    }
+
+  </style>
+
+  <script>
+    const GRID_SIZE = 7;
+    const NUM_SQUARES = GRID_SIZE * GRID_SIZE; // 49
+    var counter = 0; // Use regular number, JS numbers handle up to 2^53 safely
+    var squares7x7 = [];
+    var squares49 = [];
+    var interval = null;
+
+    // Spiral order for 7x7 grid, starting center (index 24), spiraling outwards.
+    // Maps bit index i to grid index spiralOrder[i]. LSB (bit 0) is center.
+    var spiralOrder = [
+        24, 25, 32, 31, 30, 23, 16, 17, 18, 19, 26, 33, 40, 39, 38, 37, 36,
+        29, 22, 15, 8,  9,  10, 11, 12, 20, 27, 34, 41, 48, 47, 46, 45, 44,
+        43, 42, 35, 28, 21, 14, 7,  0,  1,  2,  3,  4,  5,  6, 13
+    ];
+
+    // Create inverse map: grid index -> bit index for faster lookup on click
+    var gridIndexToBitIndex = new Array(NUM_SQUARES);
+    spiralOrder.forEach((gridIndex, bitIndex) => {
+        if (gridIndex >= 0 && gridIndex < NUM_SQUARES) {
+            gridIndexToBitIndex[gridIndex] = bitIndex;
+        }
+    });
+
+    // Function to safely check the value of a bit (works for > 31 bits)
+    function isBitSet(number, bitIndex) {
+        // Using division and modulo is safer for large numbers than bitwise &
+        const bitValue = Math.pow(2, bitIndex);
+        // Handle potential floating point inaccuracies with large numbers if necessary
+        // For 49 bits, this should generally be safe.
+        return Math.floor(number / bitValue) % 2 === 1;
+    }
+
+    function updateDisplay() {
+        // Update Page Counter (49 bits)
+        // PadStart might be slow for frequent updates, but simple
+        var binary = counter.toString(2).padStart(NUM_SQUARES, '0');
+        var pageCounter = document.getElementById('page-counter');
+        pageCounter.textContent = binary;
+
+        // Highlight based on inner 5x5 cycle (every 32 steps = 2^5)
+        // Check counter is not 0 to avoid highlight on initial load/reset
+        const shouldHighlight = counter !== 0 && counter % 32 === 0;
+        if (shouldHighlight) {
+            if (!pageCounter.classList.contains('highlight')) {
+                 pageCounter.classList.add('highlight');
+                 // Remove highlight after a delay
+                 setTimeout(() => {
+                    // Only remove if it hasn't been triggered again quickly
+                    if (document.getElementById('page-counter').classList.contains('highlight')) {
+                         // Re-check condition in case counter changed very fast
+                         const currentCounter = counter; // Capture current state
+                         if (!(currentCounter !== 0 && currentCounter % 32 === 0)) {
+                              document.getElementById('page-counter').classList.remove('highlight');
+                         }
+                    }
+                 }, 150); // Duration of highlight
+            }
+        } else {
+            pageCounter.classList.remove('highlight'); // Ensure it's off otherwise
+        }
+
+        // Update 7x7 Grid
+        for (var bitIndex = 0; bitIndex < NUM_SQUARES; bitIndex++) {
+            const set = isBitSet(counter, bitIndex);
+            var gridIndex = spiralOrder[bitIndex];
+            if (gridIndex !== undefined && squares7x7[gridIndex]) { // Check if gridIndex is valid
+                var square = squares7x7[gridIndex];
+                if (set)
+                    square.classList.add('active');
+                else
+                    square.classList.remove('active');
+            } else {
+                // console.warn(`Invalid gridIndex ${gridIndex} for bitIndex ${bitIndex}`);
+            }
+        }
+
+        // Update 49-Cell Grid (LSB 'bit 0' corresponds to squares49[0], which is rightmost due to RTL)
+        for (var bitIndex = 0; bitIndex < NUM_SQUARES; bitIndex++) {
+            const set = isBitSet(counter, bitIndex);
+            var square = squares49[bitIndex]; // Index corresponds to bitIndex
+            if (square) { // Check if square exists
+                if (set) {
+                    square.classList.add('active');
+                    square.classList.remove('inactive');
+                    square.querySelector('span').textContent = '1';
+                } else {
+                    square.classList.remove('active');
+                    square.classList.add('inactive');
+                    square.querySelector('span').textContent = '0';
+                }
+            }
+        }
+    }
+
+    function increment() {
+        // Check if counter will exceed safe integer limit before incrementing
+        if (counter >= Number.MAX_SAFE_INTEGER) {
+            console.warn("Counter reached MAX_SAFE_INTEGER. Stopping.");
+            toggle(); // Stop the timer
+            return;
+        }
+        counter++;
+        updateDisplay();
+    }
+
+    // Function to safely toggle a bit (works for > 31 bits)
+    function toggleBit(bitIndex) {
+        if (bitIndex >= 0 && bitIndex < NUM_SQUARES) {
+            const bitValue = Math.pow(2, bitIndex);
+            const currentlySet = isBitSet(counter, bitIndex);
+
+            let newCounter;
+            if (currentlySet) {
+                newCounter = counter - bitValue; // Unset bit
+            } else {
+                newCounter = counter + bitValue; // Set bit
+            }
+
+            // Ensure the new value is within safe limits
+            if (newCounter >= 0 && newCounter <= Number.MAX_SAFE_INTEGER) {
+                 counter = newCounter;
+                 updateDisplay();
+            } else {
+                 console.warn(`Toggling bit ${bitIndex} resulted in unsafe integer. Operation cancelled.`);
+            }
+        }
+    }
+
+    function setupClickListeners() {
+        // 7x7 Grid Listener
+        squares7x7.forEach((square, gridIndex) => {
+            square.addEventListener('click', () => {
+                // Use the pre-calculated inverse map
+                const bitIndex = gridIndexToBitIndex[gridIndex];
+                if (bitIndex !== undefined) {
+                     toggleBit(bitIndex);
+                } else {
+                    // Should not happen if spiralOrder is correct
+                    console.error(`Could not find bitIndex for gridIndex ${gridIndex}`);
+                }
+            });
+        });
+
+        // 49-Cell Grid Listener
+        squares49.forEach((square, bitIndex) => {
+             // For this grid, the array index IS the bit index (LSB = index 0 = rightmost square)
+            square.addEventListener('click', () => {
+                toggleBit(bitIndex);
+            });
+        });
+    }
+
+    function toggle() {
+        var button = document.getElementById('toggle-btn');
+        if (interval) {
+            clearInterval(interval);
+            interval = null;
+            button.textContent = 'Go'; // Changed text
+        } else {
+            var speed = document.getElementById('speed-slider').value;
+            // Ensure speed is reasonable, especially if slider returns 0
+            var intervalSpeed = Math.max(10, parseInt(speed, 10)); // Minimum 10ms
+            interval = setInterval(increment, intervalSpeed);
+            button.textContent = 'Stop';
+        }
+    }
+
+    function updateInterval() {
+        var speed = document.getElementById('speed-slider').value;
+        // Optional: Display speed value
+        // document.getElementById('speed-value').textContent = speed;
+        if (interval) { // Only update if timer is running
+            clearInterval(interval);
+             // Ensure speed is reasonable
+            var intervalSpeed = Math.max(10, parseInt(speed, 10)); // Minimum 10ms
+            interval = setInterval(increment, intervalSpeed);
+        }
+    }
+
+    function reset() {
+        counter = 0;
+        if (interval) { // Stop interval if running
+            clearInterval(interval);
+            interval = null;
+            document.getElementById('toggle-btn').textContent = 'Go';
+        }
+        updateDisplay(); // Update UI to show reset state
+        // Ensure highlight is explicitly removed on reset
+        document.getElementById('page-counter').classList.remove('highlight');
+    }
+
+    window.onload = function () {
+        // Initialize 7x7 Grid
+        var grid7x7 = document.getElementById('grid7x7');
+        for (var i = 0; i < NUM_SQUARES; i++) {
+            var square = document.createElement('div');
+            square.className = 'square';
+            // Add data attribute to easily find index if needed, though direct reference is used
+            square.dataset.gridIndex = i;
+            grid7x7.appendChild(square);
+            squares7x7.push(square);
+        }
+
+        // Initialize 49-Cell Grid
+        var grid49 = document.getElementById('grid49');
+        // Create squares in order 0 to 48. DOM insertion order.
+        for (var i = 0; i < NUM_SQUARES; i++) {
+            var square = document.createElement('div');
+            square.className = 'square inactive'; // Start inactive
+            var text = document.createElement('span');
+            text.textContent = '0';
+            square.appendChild(text);
+            // Add data attribute for bit index
+            square.dataset.bitIndex = i;
+            grid49.appendChild(square);
+            squares49.push(square);
+        }
+        // IMPORTANT: Because grid49 uses direction: rtl, the *first* element added (index 0)
+        // appears on the *right*. This matches the desired LSB=right behavior,
+        // so squares49[0] correctly corresponds to bit 0 (LSB). No reversal needed.
+
+
+        // Slider setup
+        document.getElementById('speed-slider').addEventListener('input', updateInterval);
+        // Optional: Display initial speed value
+        // document.getElementById('speed-value').textContent = document.getElementById('speed-slider').value;
+
+
+        // Setup click handlers
+        setupClickListeners();
+
+        // Initial display update based on counter = 0
+        updateDisplay();
+    };
+  </script>
+</head>
+<body>
+<div class="container">
+  <!-- Updated ID and initial text for 49 bits -->
+  <div id="page-counter" class="page-counter">0000000000000000000000000000000000000000000000000</div>
+
+  <!-- Updated ID -->
+  <div id="grid7x7" class="grid7x7"></div>
+
+  <!-- Updated ID -->
+  <div id="grid49" class="grid49"></div>
+
+  <div class="btn-row">
+    <!-- Updated button text -->
+    <button id="toggle-btn" onclick="toggle()">Go</button>
+    <button onclick="reset()">Reset</button>
+  </div>
+
+  <div class="slider-container">
+    <!-- Removed '(ms)' -->
+    <label>Speed:</label>
+    <input type="range" id="speed-slider" min="10" max="1000" value="200" class="slider">
+    <!-- Optional: span to display current speed value -->
+    <!-- <span id="speed-value" style="margin-left: 10px;">200</span> -->
+  </div>
+</div>
+</body>
+</html>
