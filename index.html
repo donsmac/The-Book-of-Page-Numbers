@@ -39,8 +39,16 @@
       font-weight: 700;
       font-style: italic;
       color: white;
-      margin: 15px 0;
+      margin: 15px 0 8px 0;
       text-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+    }
+
+    .title-block .tagline {
+      font-size: 20px;
+      font-style: italic;
+      font-family: 'Crimson Text', serif;
+      color: #bbbbbb;
+      margin-bottom: 16px;
     }
 
     .title-block .page-number {
@@ -56,8 +64,9 @@
       font-size: inherit;
       border: none;
       border-bottom: 1px solid #666;
-      width: 200px;
+      width: 260px;
       text-align: center;
+      padding: 3px;
     }
 
     .grid7x7 {
@@ -181,6 +190,7 @@
     <div class="title-block">
       <div class="subtitle">The first 562,949,953,421,312 Pages</div>
       <div class="main-title">The Book of PAGE NUMBERS</div>
+      <div class="tagline">A Model of Creation</div>
       <div class="page-number">Page: <input id="page-input" type="text" value="0" /></div>
     </div>
 
@@ -315,7 +325,7 @@
 
     function handleManualInput(event) {
       const val = event.target.value.replace(/,/g, '').trim();
-      if (/^\d{1,15}$/.test(val)) {
+      if (/^\d{1,16}$/.test(val)) {
         const num = parseInt(val, 10);
         if (num <= Number.MAX_SAFE_INTEGER) {
           counter = num;
@@ -354,4 +364,3 @@
   </script>
 </body>
 </html>
-
