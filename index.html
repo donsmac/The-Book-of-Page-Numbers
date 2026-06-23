@@ -78,15 +78,17 @@
     }
 
     .grid49 {
-      display: grid;
-      grid-template-columns: repeat(49, 30px);
-      grid-template-rows: 30px;
-      justify-content: center;
-      direction: rtl;
-      margin-bottom: 30px;
-      max-width: 100%;
-      overflow-x: auto;
-    }
+  display: grid;
+  grid-template-columns: repeat(49, 30px);
+  grid-template-rows: 30px;
+  justify-content: center;
+  direction: ltr;
+  margin-bottom: 30px;
+  max-width: 100%;
+  overflow-x: auto;
+  transform: scale(0.85);
+  transform-origin: center;
+}
 
     .square {
       background-color: lightgray;
